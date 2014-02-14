@@ -53,8 +53,8 @@ class MultipleMessagesPlugin(app: Application) extends MessagesPlugin(app) {
 
   private def loadMessages(lang: String): Map[String, String] =
     app.classloader.getResources(lang).asScala.toList.reverse.map { messagesFolder =>
-      Path(messagesFolder.toURI) match{
-        case Some(path) if path.isDirectory =>
+      Path.fromString(messagesFolder.toURI.getSchemeSpecificPart) match{
+        case path if path.isDirectory =>
           path.children().map(messageFile =>
             new Messages.MessagesParser(messageFile.toURL.asInput, messageFile.toString).parse.map { message =>
               message.key -> message.pattern
