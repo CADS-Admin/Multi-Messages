@@ -1,6 +1,8 @@
 package play.api.i18n
 
-import play.api.{Play, Application}
+import play.api.{Logger, Play, Application}
+import java.io.{InputStream, File}
+import scala.util.{Try, Success}
 
 /**
  * Using play structure in order to re-use all the original MessagesPlugin private[i18n] internal classes
@@ -47,29 +49,29 @@ object MMessages {
 
 class MultipleMessagesPlugin(app: Application) extends MessagesPlugin(app) {
 
+  val DEFAULT_FILENAME = "messagelisting.properties"
+  lazy val messageListingName = Try(app.configuration.getString("i18n.messagelisting").getOrElse(DEFAULT_FILENAME)) match { case Success(s) => s case _ => DEFAULT_FILENAME}
   import scala.collection.JavaConverters._
   import scalax.file._
   import scalax.io.JavaConverters._
 
-  private def loadMessages(lang: String): Map[String, String] =
-    app.classloader.getResources(lang).asScala.toList.reverse.map { messagesFolder =>
-      Path.fromString(messagesFolder.toURI.getSchemeSpecificPart) match{
-        case path if path.isDirectory =>
-          path.children().map(messageFile =>
-            new Messages.MessagesParser(messageFile.toURL.asInput, messageFile.toString).parse.map { message =>
-              message.key -> message.pattern
-            }.toMap
-          ).asInstanceOf[PathSet[Map[String,String]]].fold(Map[String,String]()) { _ ++ _ }
-        case _ => Map[String,String]()
-      }
+  private def loadMessagesStr(lang:String): Map[String,String] =
+    scala.io.Source.fromInputStream(app.classloader.getResourceAsStream(messageListingName)).getLines().map{ messageFile =>
+      app.classloader.getResources(lang+File.separator+messageFile).asScala.toList.reverse.map{ messageUrl =>
+        new Messages.MessagesParser(messageUrl.asInput, messageFile).parse.map { message =>
+          message.key -> message.pattern
+        }.toMap
+      }.foldLeft(Map.empty[String, String]) { _ ++ _ }
     }.foldLeft(Map.empty[String, String]) { _ ++ _ }
+
+
 
 
   private lazy val messages = {
     MessagesApi {
       Lang.availables(app).map(_.code).map { lang =>
-        (lang, loadMessages(lang))
-      }.toMap + ("default" -> loadMessages("messages"))
+        (lang, loadMessagesStr(lang))
+      }.toMap
     }
   }
 
