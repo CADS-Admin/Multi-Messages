@@ -26,6 +26,27 @@ object MMessages {
     }.getOrElse(noMatch(key, args))
   }
 
+  /**
+   * Translates the first message, not all of them.
+   *
+   * Uses `java.text.MessageFormat` internally to format the message.
+   *
+   * @param keys the message key
+   * @param args the messages arguments
+   * @return the formatted message or a default rendering if the key wasn’t defined
+   */
+  def apply(keys: Seq[String], args: Any*)(implicit lang: Lang): String = {
+    Play.maybeApplication.flatMap { app =>
+      app.plugin[MultipleMessagesPlugin].map { plugin =>
+        // Horrible code coming from playframework 2.3.5.
+        keys.foldLeft[Option[String]](None) {
+          case (None, key) => plugin.api.translate(key, args)
+          case (acc, _) => acc
+        }
+      }.getOrElse(throw new Exception("this plugin was not registered or disabled"))
+    }.getOrElse(noMatch(keys.last, args))
+  }
+
 
 
   /**
