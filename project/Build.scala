@@ -4,8 +4,8 @@ import sbt.Keys._
 object ApplicationBuild extends Build {
   val appName         = "play2-multimessages"
 
-  val appVersion      = "2.2.1" //appVersion must always be in sync with play version
-  val appScalaVersion = "2.10.2"
+  val appVersion      = "2.3.5" //appVersion must always be in sync with play version
+  val appScalaVersion = "2.10.4"
   val appScalaBinaryVersion = "2.10"
   val appScalaCrossVersions = Seq("2.10.0")
 

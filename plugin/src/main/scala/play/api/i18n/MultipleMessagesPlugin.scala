@@ -1,6 +1,9 @@
 package play.api.i18n
 
+import play.api.i18n.Messages.UrlMessageSource
 import play.api.{Play, Application}
+import java.io.File
+import scala.util.{Try, Success}
 
 /**
  * Using play structure in order to re-use all the original MessagesPlugin private[i18n] internal classes
@@ -24,6 +27,29 @@ object MMessages {
   }
 
   /**
+   * Translates the first message, not all of them.
+   *
+   * Uses `java.text.MessageFormat` internally to format the message.
+   *
+   * @param keys the message key
+   * @param args the messages arguments
+   * @return the formatted message or a default rendering if the key wasn’t defined
+   */
+  def apply(keys: Seq[String], args: Any*)(implicit lang: Lang): String = {
+    Play.maybeApplication.flatMap { app =>
+      app.plugin[MultipleMessagesPlugin].map { plugin =>
+        // Horrible code coming from playframework 2.3.5.
+        keys.foldLeft[Option[String]](None) {
+          case (None, key) => plugin.api.translate(key, args)
+          case (acc, _) => acc
+        }
+      }.getOrElse(throw new Exception("this plugin was not registered or disabled"))
+    }.getOrElse(noMatch(keys.last, args))
+  }
+
+
+
+  /**
    * Check if a message key is defined.
    * @param key the message key
    * @return a boolean
@@ -33,6 +59,8 @@ object MMessages {
       app.plugin[MultipleMessagesPlugin].map(_.api.isDefinedAt(key)).getOrElse(throw new Exception("this plugin was not registered or disabled"))
     }.getOrElse(false)
   }
+
+
 
   /**
    * Retrieves all messages defined in this application.
@@ -45,38 +73,32 @@ object MMessages {
 }
 
 
-class MultipleMessagesPlugin(app: Application) extends MessagesPlugin(app) {
+class MultipleMessagesPlugin(app: Application) extends DefaultMessagesPlugin(app) {
 
+  val DEFAULT_FILENAME = "messagelisting.properties"
+  lazy val messageListingName = Try(app.configuration.getString("i18n.messagelisting").getOrElse(DEFAULT_FILENAME)) match { case Success(s) => s case _ => DEFAULT_FILENAME}
   import scala.collection.JavaConverters._
-  import scalax.file._
-  import scalax.io.JavaConverters._
 
-  private def loadMessages(lang: String): Map[String, String] =
-    app.classloader.getResources(lang).asScala.toList.reverse.map { messagesFolder =>
-      Path(messagesFolder.toURI) match{
-        case Some(path) =>
-          path.children().map(messageFile =>
-            new Messages.MessagesParser(messageFile.toURL.asInput, messageFile.toString).parse.map { message =>
-              message.key -> message.pattern
-            }.toMap
-          ).asInstanceOf[PathSet[Map[String,String]]].fold(Map[String,String]()) { _ ++ _ }
-        case _ => Map[String,String]()
-      }
+  private def loadMessagesStr(lang:String): Map[String,String] =
+    scala.io.Source.fromInputStream(app.classloader.getResourceAsStream(messageListingName)).getLines().map{ messageFile =>
+      app.classloader.getResources(lang+File.separator+messageFile).asScala.toList.reverse.map{ messageUrl =>
+         Messages.messages(UrlMessageSource(messageUrl), messageFile).fold(e => throw e, identity)
+      }.foldLeft(Map.empty[String, String]) { _ ++ _ }
     }.foldLeft(Map.empty[String, String]) { _ ++ _ }
 
 
-  private lazy val messages = {
-    MessagesApi {
+
+  override protected lazy val messages = {
       Lang.availables(app).map(_.code).map { lang =>
-        (lang, loadMessages(lang))
-      }.toMap + ("default" -> loadMessages("messages"))
-    }
+        (lang, loadMessagesStr(lang))
+      }.toMap
   }
+
 
   /**
    * The underlying internationalisation API.
    */
-  override def api = messages
+  override lazy val api = MessagesApi(messages)
 
   /**
    * Loads all configuration and message files defined in the classpath.
