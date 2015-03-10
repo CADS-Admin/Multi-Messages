@@ -29,7 +29,7 @@ object ApplicationBuild extends Build {
       resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/",
       resolvers += "Typesafe Maven Repository" at "http://repo.typesafe.com/typesafe/maven-releases/",
       libraryDependencies += "com.typesafe.play" %% "play" % appVersion % "provided",
-      organization := "com.dwp",
+      organization := "gov.dwp",
       version := appVersion
       )
 }
